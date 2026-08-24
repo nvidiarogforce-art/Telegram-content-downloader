@@ -35,6 +35,8 @@ Telegram Web A exposes inline playback through a Service Worker `progressive` ro
 
 **Download visible videos** processes cards currently on screen. **Download all loaded videos** also scrolls unloaded detected cards into view so Telegram mounts their video sources, then returns to the initially visible card when the batch finishes. Telegram can virtualize older messages, so the completed/failed totals in the popup are the authoritative batch result.
 
+Chrome can ask whether `web.telegram.org` may download multiple files. Choose **Allow** for batch mode; otherwise Chrome may accept only the first prepared video.
+
 It does **not** break Telegram encryption, discover deleted messages, guess passwords, or access content that your logged-in account cannot already view.
 
 ## Development

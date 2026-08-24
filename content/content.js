@@ -366,7 +366,7 @@
     }
     showToast(batch.cancelled
       ? `Stopped after ${batch.completed} videos`
-      : `Finished: ${batch.completed} video${batch.completed === 1 ? "" : "s"} saved${batch.failed ? `, ${batch.failed} failed. ${batch.lastError}` : ""}`);
+      : `Finished: ${batch.completed} video${batch.completed === 1 ? "" : "s"} prepared${batch.failed ? `, ${batch.failed} failed. ${batch.lastError}` : ""}`);
     return getStatus();
   }
 
