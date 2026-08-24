@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Telegram Video Saver</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M20.7 3.4 2.9 10.3c-1.2.5-1.2 1.1-.2 1.4l4.6 1.4 1.8 5.5c.2.6.1.9.8.9.5 0 .8-.2 1-.4l2.2-2.1 4.6 3.4c.8.5 1.4.2 1.6-.8l3-14.2c.3-1.3-.5-1.9-1.6-1.5Z" fill="currentColor"/><path d="m9 13.1 9-5.7c.4-.3.8-.1.5.2l-7.4 6.7-.3 3.4-1.8-4.6Z" fill="#fff" opacity=".9"/></svg>
+        </div>
+        <div>
+          <h1>Video Saver</h1>
+          <p>For Telegram Web</p>
+        </div>
+        <label class="switch" title="Show download buttons">
+          <input id="enabled" type="checkbox" checked>
+          <span></span>
+        </label>
+      </header>
+
+      <section class="status-card">
+        <div>
+          <span id="mediaCount" class="count">—</span>
+          <span class="label">loaded videos found</span>
+        </div>
+        <button id="scan" class="icon-button" title="Scan again" aria-label="Scan again">
+          <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>
+        </button>
+      </section>
+
+      <p id="message" class="message" role="status">Open a chat and scroll through its videos first.</p>
+
+      <div class="actions">
+        <button id="downloadAll" class="primary">
+          <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 5-5m-5 5-5-5M5 20h14"/></svg>
+          Download all loaded videos
+        </button>
+        <button id="downloadVisible" class="secondary">Download visible videos</button>
+        <button id="stop" class="danger" hidden>Stop batch</button>
+      </div>
+
+      <footer>Runs locally · No tracking · Not affiliated with Telegram</footer>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

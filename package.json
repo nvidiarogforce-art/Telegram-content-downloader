@@ -1,0 +1,14 @@
+{
+  "name": "telegram-video-saver-extension",
+  "version": "1.5.0",
+  "private": true,
+  "description": "A privacy-first Telegram Web video downloader extension.",
+  "scripts": {
+    "icons": "node tools/generate-icons.mjs",
+    "test": "node --test",
+    "package": "node tools/package-extension.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
