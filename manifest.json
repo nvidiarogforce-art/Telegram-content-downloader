@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "Telegram Media Saver",
-  "short_name": "TG Media Saver",
-  "version": "1.0.0",
-  "description": "Download photos, videos, audio, voice notes, GIFs, stickers, and files already available in Telegram Web.",
+  "name": "Telegram Video Saver",
+  "short_name": "TG Video Saver",
+  "version": "1.1.0",
+  "description": "Download videos already loaded and accessible in Telegram Web.",
   "minimum_chrome_version": "102",
   "permissions": [
     "downloads",
@@ -16,7 +16,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "Telegram Media Saver",
+    "default_title": "Telegram Video Saver",
     "default_popup": "popup/popup.html",
     "default_icon": {
       "16": "icons/icon16.png",

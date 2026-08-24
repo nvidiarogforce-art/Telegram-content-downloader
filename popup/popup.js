@@ -7,8 +7,7 @@ const elements = {
   scan: document.querySelector("#scan"),
   downloadAll: document.querySelector("#downloadAll"),
   downloadVisible: document.querySelector("#downloadVisible"),
-  stop: document.querySelector("#stop"),
-  folder: document.querySelector("#folder")
+  stop: document.querySelector("#stop")
 };
 
 let activeTab;
@@ -18,9 +17,8 @@ initialize();
 
 async function initialize() {
   [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  const settings = await chrome.storage.sync.get(["enabled", "downloadFolder"]);
+  const settings = await chrome.storage.sync.get(["enabled"]);
   elements.enabled.checked = settings.enabled ?? true;
-  elements.folder.value = settings.downloadFolder || "Telegram Media";
 
   const isTelegram = /^https:\/\/web\.telegram\.org\//i.test(activeTab?.url || "");
   setControlsEnabled(isTelegram);
@@ -61,9 +59,9 @@ function renderStatus(status) {
     clearTimeout(pollTimer);
     pollTimer = setTimeout(refreshStatus, 450);
   } else if (status?.count) {
-    showMessage(`${status.visibleCount} currently visible. Scroll upward to load more before a full batch.`);
+    showMessage(`${status.visibleCount} videos currently visible. Scroll upward to load more before a full batch.`);
   } else {
-    showMessage("No media found yet. Open a chat, scroll through it, and scan again.");
+    showMessage("No videos found yet. Open a chat, scroll through its videos, and scan again.");
   }
 }
 
@@ -73,25 +71,30 @@ function showMessage(text, isError = false) {
 }
 
 function setControlsEnabled(enabled) {
-  for (const element of [elements.enabled, elements.scan, elements.downloadAll, elements.downloadVisible, elements.folder]) {
+  for (const element of [elements.enabled, elements.scan, elements.downloadAll, elements.downloadVisible]) {
     element.disabled = !enabled;
   }
 }
 
-elements.scan.addEventListener("click", async () => renderStatus(await send("TGMS_SCAN")));
-elements.downloadAll.addEventListener("click", async () => renderStatus(await send("TGMS_DOWNLOAD_ALL")));
-elements.downloadVisible.addEventListener("click", async () => renderStatus(await send("TGMS_DOWNLOAD_VISIBLE")));
-elements.stop.addEventListener("click", async () => renderStatus(await send("TGMS_STOP")));
+elements.scan.addEventListener("click", () => runCommand("TGMS_SCAN"));
+elements.downloadAll.addEventListener("click", () => runCommand("TGMS_DOWNLOAD_ALL"));
+elements.downloadVisible.addEventListener("click", () => runCommand("TGMS_DOWNLOAD_VISIBLE"));
+elements.stop.addEventListener("click", () => runCommand("TGMS_STOP"));
 
 elements.enabled.addEventListener("change", async () => {
-  const enabled = elements.enabled.checked;
-  await chrome.storage.sync.set({ enabled });
-  renderStatus(await send("TGMS_SET_ENABLED", { enabled }));
+  try {
+    const enabled = elements.enabled.checked;
+    await chrome.storage.sync.set({ enabled });
+    renderStatus(await send("TGMS_SET_ENABLED", { enabled }));
+  } catch (_error) {
+    showMessage("Could not update the Telegram tab. Refresh it and try again.", true);
+  }
 });
 
-elements.folder.addEventListener("change", async () => {
-  const downloadFolder = elements.folder.value.trim() || "Telegram Media";
-  elements.folder.value = downloadFolder;
-  await chrome.storage.sync.set({ downloadFolder });
-  showMessage(`Future URL downloads will use “${downloadFolder}”.`);
-});
+async function runCommand(type) {
+  try {
+    renderStatus(await send(type));
+  } catch (_error) {
+    showMessage("Telegram tab stopped responding. Refresh the page and try again.", true);
+  }
+}

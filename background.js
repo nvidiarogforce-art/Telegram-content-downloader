@@ -5,10 +5,9 @@ importScripts("shared/media-utils.js");
 const ALLOWED_SENDER = /^https:\/\/web\.telegram\.org\//i;
 
 chrome.runtime.onInstalled.addListener(async () => {
-  const current = await chrome.storage.sync.get(["enabled", "downloadFolder"]);
+  const current = await chrome.storage.sync.get(["enabled"]);
   await chrome.storage.sync.set({
-    enabled: current.enabled ?? true,
-    downloadFolder: current.downloadFolder ?? "Telegram Media"
+    enabled: current.enabled ?? true
   });
 });
 
@@ -27,22 +26,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 async function startDownload(message) {
+  if (message.mediaType !== "video") {
+    throw new Error("Only video downloads are supported.");
+  }
   const url = String(message.url || "");
   if (!/^https?:/i.test(url)) {
     throw new Error("This media URL must be downloaded inside the Telegram tab.");
   }
 
-  const settings = await chrome.storage.sync.get(["downloadFolder"]);
-  const folder = TelegramMediaUtils.sanitizeFilename(settings.downloadFolder || "Telegram Media", "Telegram Media");
-  const filename = TelegramMediaUtils.ensureExtension(message.filename, {
+  const filename = TelegramMediaUtils.ensureVideoExtension(message.filename, {
     mimeType: message.mimeType,
-    type: message.mediaType,
     url
   });
 
   return chrome.downloads.download({
     url,
-    filename: `${folder}/${filename}`,
+    filename: `Telegram Videos/${filename}`,
     conflictAction: "uniquify",
     saveAs: false
   });
