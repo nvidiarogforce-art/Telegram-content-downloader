@@ -52,10 +52,12 @@
     return {
       running: false,
       cancelled: false,
+      current: 0,
       completed: 0,
       failed: 0,
       total: 0,
       mode: "all",
+      lastError: "",
       ...overrides
     };
   }
@@ -232,9 +234,9 @@
     if (label) label.textContent = text;
   }
 
-  async function downloadVideo(descriptor, index, shouldCancel = () => false) {
+  async function downloadVideo(descriptor, index, shouldCancel = () => false, bringIntoView = false) {
     if (descriptor.type !== "video") throw new Error("Only videos can be downloaded.");
-    const source = await ensureVideoSource(descriptor, shouldCancel);
+    const source = await ensureVideoSource(descriptor, shouldCancel, bringIntoView);
     const fallback = Utils.makeFallbackName(index);
     const filename = Utils.ensureVideoExtension(descriptor.filename || fallback, {
       mimeType: source.mimeType,
@@ -244,9 +246,14 @@
     await requestVerifiedPageDownload(source.url, filename);
   }
 
-  async function ensureVideoSource(descriptor, shouldCancel) {
+  async function ensureVideoSource(descriptor, shouldCancel, bringIntoView) {
     let source = resolveVideoSource(descriptor.element);
     if (source.url) return source;
+    if (bringIntoView && !isVisible(descriptor.element)) {
+      descriptor.element.scrollIntoView({ behavior: "auto", block: "center", inline: "nearest" });
+      await waitForCardVisibility(descriptor.element, shouldCancel);
+    }
+    if (shouldCancel()) throw new Error("Batch stopped.");
     descriptor.element.dispatchEvent(new MouseEvent("click", {
       bubbles: true,
       cancelable: true,
@@ -261,12 +268,24 @@
     return source;
   }
 
+  function waitForCardVisibility(card, shouldCancel) {
+    return new Promise((resolve) => {
+      const startedAt = Date.now();
+      const timer = setInterval(() => {
+        if (isVisible(card) || !card.isConnected || shouldCancel() || Date.now() - startedAt >= 5_000) {
+          clearInterval(timer);
+          resolve();
+        }
+      }, 100);
+    });
+  }
+
   function waitForVideoSource(card, shouldCancel) {
     return new Promise((resolve) => {
       const startedAt = Date.now();
       const timer = setInterval(() => {
         const source = resolveVideoSource(card);
-        if (source.url || Date.now() - startedAt >= SOURCE_WAIT_TIMEOUT_MS || shouldCancel()) {
+        if (source.url || !card.isConnected || Date.now() - startedAt >= SOURCE_WAIT_TIMEOUT_MS || shouldCancel()) {
           clearInterval(timer);
           resolve(source);
         }
@@ -324,21 +343,30 @@
       return getStatus();
     }
 
-    showToast(`Starting ${items.length} video download${items.length === 1 ? "" : "s"}…`);
+    const restoreTarget = items.find((item) => isVisible(item.element))?.element;
+    showToast(mode === "all"
+      ? `Preparing ${items.length} videos. Telegram may scroll while unloaded videos are opened…`
+      : `Starting ${items.length} visible video download${items.length === 1 ? "" : "s"}…`);
     for (let index = 0; index < items.length; index += 1) {
       if (batch.cancelled) break;
+      batch.current = index + 1;
       try {
-        await downloadVideo(items[index], index, () => batch.cancelled);
+        await downloadVideo(items[index], index, () => batch.cancelled, mode === "all");
         batch.completed += 1;
-      } catch (_error) {
+      } catch (error) {
+        if (batch.cancelled) break;
         batch.failed += 1;
+        batch.lastError = error instanceof Error ? error.message : "Unknown video download error";
       }
       await delay(300);
     }
     batch.running = false;
+    if (restoreTarget?.isConnected) {
+      restoreTarget.scrollIntoView({ behavior: "auto", block: "center", inline: "nearest" });
+    }
     showToast(batch.cancelled
       ? `Stopped after ${batch.completed} videos`
-      : `Finished: ${batch.completed} video${batch.completed === 1 ? "" : "s"} started${batch.failed ? `, ${batch.failed} failed` : ""}`);
+      : `Finished: ${batch.completed} video${batch.completed === 1 ? "" : "s"} saved${batch.failed ? `, ${batch.failed} failed. ${batch.lastError}` : ""}`);
     return getStatus();
   }
 

@@ -46,7 +46,13 @@
   }
 
   async function fetchAndDownloadVideo(url, requestedFilename) {
-    const response = await fetch(url, { credentials: "include" });
+    const fetchUrl = buildDownloadFetchUrl(url, requestedFilename);
+    let response;
+    try {
+      response = await fetch(fetchUrl, { credentials: "include" });
+    } catch (_error) {
+      throw new Error("Telegram's download stream was unavailable. Reload Telegram normally and try again.");
+    }
     if (!response.ok) {
       throw new Error(`Telegram returned HTTP ${response.status} instead of the video.`);
     }
@@ -74,6 +80,15 @@
     setTimeout(() => URL.revokeObjectURL(objectUrl), 300_000);
 
     return { filename, mimeType: detectedType, size: videoBlob.size };
+  }
+
+  function buildDownloadFetchUrl(value, filename) {
+    const url = new URL(value, location.href);
+    if (url.origin === location.origin && url.pathname.includes("/progressive/")) {
+      url.pathname = url.pathname.replace("/progressive/", "/download/");
+      url.searchParams.set("filename", encodeURIComponent(filename));
+    }
+    return url.href;
   }
 
   async function detectVideoType(blob, declaredType) {

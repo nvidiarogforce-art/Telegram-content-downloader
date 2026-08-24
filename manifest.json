@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Telegram Video Saver",
   "short_name": "TG Video Saver",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Download videos already loaded and accessible in Telegram Web.",
   "minimum_chrome_version": "102",
   "permissions": [

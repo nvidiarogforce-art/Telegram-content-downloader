@@ -32,11 +32,19 @@ test("unloaded Telegram video cards are clicked once and awaited", () => {
 test("downloads are fetched and validated inside the Telegram page", () => {
   assert.match(contentScript, /tgvs:prepare-video-request/);
   assert.doesNotMatch(contentScript, /chrome\.downloads|DOWNLOAD_URL/);
-  assert.match(pageBridge, /fetch\(url, \{ credentials: "include" \}\)/);
+  assert.match(pageBridge, /fetch\(fetchUrl, \{ credentials: "include" \}\)/);
   assert.match(pageBridge, /response\.blob\(\)/);
   assert.match(pageBridge, /looksLikeHtml\(bytes\)/);
   assert.match(pageBridge, /URL\.createObjectURL\(videoBlob\)/);
   assert.match(pageBridge, /anchor\.download = filename/);
+  assert.match(pageBridge, /replace\("\/progressive\/", "\/download\/"\)/);
+});
+
+test("full batches bring unloaded cards into view and expose progress", () => {
+  assert.match(contentScript, /mode === "all"/);
+  assert.match(contentScript, /scrollIntoView\(\{ behavior: "auto", block: "center"/);
+  assert.match(contentScript, /batch\.current = index \+ 1/);
+  assert.match(contentScript, /if \(batch\.cancelled\) break/);
 });
 
 test("HTML and non-video responses cannot be saved as videos", () => {

@@ -31,7 +31,9 @@ Click the extension icon after opening a chat. Telegram loads message history la
 
 The content script observes native `<video>` elements and Telegram Web A's official `.message-content.video .media-inner` video-card structure. If a card has not mounted its player yet, the extension starts Telegram's normal load action and waits for the video source.
 
-Telegram Web can expose a Service Worker streaming URL that fails when Chrome's Downloads API requests it outside the player and may produce a `document….htm` file. This extension instead fetches the source inside the Telegram page, checks the response type and video signature, creates a local video Blob, and only then starts the save. The button shows **Preparing video…** while those bytes are being collected; large videos can take longer.
+Telegram Web A exposes inline playback through a Service Worker `progressive` route that requires byte-range requests. A normal fetch of that playback URL fails, while Chrome's Downloads API can produce a `document….htm` file. This extension converts it to Telegram's official full-file `download` route inside the controlled page, checks the response type and video signature, creates a local video Blob, and only then starts the save. The button shows **Preparing video…** while those bytes are being collected; large videos can take longer.
+
+**Download visible videos** processes cards currently on screen. **Download all loaded videos** also scrolls unloaded detected cards into view so Telegram mounts their video sources, then returns to the initially visible card when the batch finishes. Telegram can virtualize older messages, so the completed/failed totals in the popup are the authoritative batch result.
 
 It does **not** break Telegram encryption, discover deleted messages, guess passwords, or access content that your logged-in account cannot already view.
 
@@ -45,7 +47,7 @@ npm run icons
 npm run package
 ```
 
-The packaged extension is written to `dist/telegram-video-saver-v1.4.0.zip`.
+The packaged extension is written to `dist/telegram-video-saver-v1.5.0.zip`.
 
 ## Compatibility notes
 

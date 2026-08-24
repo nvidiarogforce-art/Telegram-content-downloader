@@ -12,6 +12,7 @@ function createHarness(response) {
   const events = new EventTarget();
   const clicks = [];
   const objectUrls = [];
+  const fetchCalls = [];
   const body = { append() {} };
   const document = {
     body,
@@ -39,8 +40,11 @@ function createHarness(response) {
     Uint8Array,
     URL: TestURL,
     document,
-    fetch: async () => response,
-    location: { href: "https://web.telegram.org/a/" },
+    fetch: async (url, options) => {
+      fetchCalls.push({ url, options });
+      return response;
+    },
+    location: { href: "https://web.telegram.org/a/", origin: "https://web.telegram.org" },
     setTimeout() {},
     window: {
       addEventListener: events.addEventListener.bind(events),
@@ -60,7 +64,7 @@ function createHarness(response) {
     });
   }
 
-  return { clicks, objectUrls, request };
+  return { clicks, fetchCalls, objectUrls, request };
 }
 
 test("page bridge saves a verified MP4 Blob with a video extension", async () => {
@@ -72,12 +76,17 @@ test("page bridge saves a verified MP4 Blob with a video extension", async () =>
   const harness = createHarness(response);
   const result = await harness.request({
     requestId: "request-1",
-    url: "https://web.telegram.org/stream/123",
-    filename: "telegram-video.htm"
+    url: "https://web.telegram.org/a/progressive/media-hash?account=3",
+    filename: "telegram-video.mp4"
   });
 
   assert.equal(result.ok, true);
   assert.equal(result.filename, "telegram-video.mp4");
+  const fetchedUrl = new URL(harness.fetchCalls[0].url);
+  assert.equal(fetchedUrl.pathname, "/a/download/media-hash");
+  assert.equal(fetchedUrl.searchParams.get("account"), "3");
+  assert.equal(fetchedUrl.searchParams.get("filename"), "telegram-video.mp4");
+  assert.equal(harness.fetchCalls[0].options.credentials, "include");
   assert.equal(harness.clicks.length, 1);
   assert.equal(harness.clicks[0].download, "telegram-video.mp4");
   assert.equal(harness.objectUrls[0].type, "video/mp4");

@@ -55,7 +55,9 @@ function renderStatus(status) {
 
   if (running) {
     const done = status.batch.completed + status.batch.failed;
-    showMessage(`Downloading ${done} of ${status.batch.total}…`);
+    const current = status.batch.current || Math.min(done + 1, status.batch.total);
+    const failures = status.batch.failed ? ` · ${status.batch.failed} failed` : "";
+    showMessage(`Preparing video ${current} of ${status.batch.total} · ${done} finished${failures}`);
     clearTimeout(pollTimer);
     pollTimer = setTimeout(refreshStatus, 450);
   } else if (status?.count) {
