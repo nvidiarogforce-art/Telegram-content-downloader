@@ -25,8 +25,8 @@ jobs:
 
       - name: Check JavaScript syntax
         run: |
-          node --check background.js
           node --check content/content.js
+          node --check content/page-bridge.js
           node --check popup/popup.js
 
       - name: Package extension
@@ -36,5 +36,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: telegram-video-saver
-          path: dist/telegram-video-saver-v1.3.0.zip
+          path: dist/telegram-video-saver-v1.4.0.zip
           if-no-files-found: error

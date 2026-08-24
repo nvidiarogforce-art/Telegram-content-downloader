@@ -10,16 +10,24 @@ const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "u
 
 test("manifest uses MV3 and narrowly scoped permissions", () => {
   assert.equal(manifest.manifest_version, 3);
-  assert.deepEqual(manifest.permissions.sort(), ["downloads", "storage"]);
+  assert.deepEqual(manifest.permissions, ["storage"]);
   assert.deepEqual(manifest.host_permissions, ["https://web.telegram.org/*"]);
+  assert.equal(manifest.background, undefined);
 });
 
 test("every referenced extension file exists", () => {
   const files = [
-    manifest.background.service_worker,
     manifest.action.default_popup,
     ...Object.values(manifest.icons),
-    ...manifest.content_scripts.flatMap((script) => [...script.css, ...script.js])
+    ...manifest.content_scripts.flatMap((script) => [...(script.css || []), ...script.js])
   ];
   for (const file of files) assert.equal(fs.existsSync(path.join(root, file)), true, `${file} is missing`);
+});
+
+test("page bridge runs in Telegram's main world before the UI scanner", () => {
+  const bridge = manifest.content_scripts.find((entry) => entry.js.includes("content/page-bridge.js"));
+  assert.deepEqual(bridge.matches, ["https://web.telegram.org/*"]);
+  assert.equal(bridge.world, "MAIN");
+  assert.equal(bridge.run_at, "document_start");
+  assert.equal(manifest.web_accessible_resources, undefined);
 });

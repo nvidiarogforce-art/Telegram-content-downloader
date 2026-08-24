@@ -8,13 +8,16 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function createMediaUtils() {
   "use strict";
 
-  const VIDEO_EXTENSIONS = new Set(["m4v", "mkv", "mov", "mp4", "webm"]);
+  const VIDEO_EXTENSIONS = new Set(["avi", "m4v", "mkv", "mov", "mp4", "mpeg", "ts", "webm"]);
   const MIME_EXTENSIONS = Object.freeze({
     "video/mp4": "mp4",
     "video/webm": "webm",
     "video/quicktime": "mov",
     "video/x-matroska": "mkv",
-    "video/x-m4v": "m4v"
+    "video/x-m4v": "m4v",
+    "video/x-msvideo": "avi",
+    "video/mpeg": "mpeg",
+    "video/mp2t": "ts"
   });
 
   function sanitizeFilename(value, fallback = "telegram-video") {

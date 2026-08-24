@@ -9,6 +9,9 @@
   const NON_VIDEO_UI_HINT = /(^|[\s_-])(avatar|emoji|gif|reaction|sticker|wallpaper)(?=$|[\s_-])/i;
   const SOURCE_WAIT_TIMEOUT_MS = 60_000;
   const SOURCE_POLL_INTERVAL_MS = 250;
+  const PAGE_DOWNLOAD_TIMEOUT_MS = 600_000;
+  const PAGE_REQUEST_EVENT = "tgvs:prepare-video-request";
+  const PAGE_RESPONSE_EVENT = "tgvs:prepare-video-response";
   const descriptors = new Map();
   const descriptorIds = new WeakMap();
   const buttons = new Map();
@@ -210,7 +213,8 @@
     if (!descriptor) return;
 
     button.disabled = true;
-    setButtonLabel(button, "Loading video…");
+    setButtonLabel(button, "Preparing video…");
+    scheduleButtonPosition();
     try {
       await downloadVideo(descriptor, 0);
       showToast("Video download started");
@@ -237,19 +241,7 @@
       url: source.url
     });
 
-    if (/^(blob:|data:)/i.test(source.url)) {
-      triggerLocalDownload(source.url, filename);
-      return;
-    }
-
-    const response = await chrome.runtime.sendMessage({
-      type: "DOWNLOAD_URL",
-      url: source.url,
-      filename,
-      mediaType: "video",
-      mimeType: source.mimeType
-    });
-    if (!response?.ok) throw new Error(response?.error || "Chrome could not start the video download.");
+    await requestVerifiedPageDownload(source.url, filename);
   }
 
   async function ensureVideoSource(descriptor, shouldCancel) {
@@ -282,14 +274,33 @@
     });
   }
 
-  function triggerLocalDownload(url, filename) {
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = filename;
-    anchor.style.display = "none";
-    document.body.append(anchor);
-    anchor.click();
-    anchor.remove();
+  async function requestVerifiedPageDownload(url, filename) {
+    return new Promise((resolve, reject) => {
+      const requestId = crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+      const timeout = setTimeout(() => {
+        removeEventListener(PAGE_RESPONSE_EVENT, handleResponse);
+        reject(new Error("Preparing this video took too long. Play it once and try again."));
+      }, PAGE_DOWNLOAD_TIMEOUT_MS);
+
+      function handleResponse(event) {
+        let response;
+        try {
+          response = JSON.parse(String(event.detail || ""));
+        } catch (_error) {
+          return;
+        }
+        if (response.requestId !== requestId) return;
+        clearTimeout(timeout);
+        removeEventListener(PAGE_RESPONSE_EVENT, handleResponse);
+        if (response.ok) resolve(response);
+        else reject(new Error(response.error || "Telegram did not return valid video bytes."));
+      }
+
+      addEventListener(PAGE_RESPONSE_EVENT, handleResponse);
+      dispatchEvent(new CustomEvent(PAGE_REQUEST_EVENT, {
+        detail: JSON.stringify({ requestId, url, filename })
+      }));
+    });
   }
 
   async function runBatch(mode) {

@@ -11,8 +11,9 @@ A privacy-first Chrome extension for downloading videos that are already loaded 
 - Detects Telegram Web A video cards before their native `<video>` element is mounted
 - Adds a labeled **Download video** control beneath every detected video card
 - Automatic unique video filenames
+- Validates video bytes before saving, so Telegram error pages cannot become `.htm` downloads
 - Local-only operation: no analytics, accounts, ads, or remote extension servers
-- Manifest V3 with only `downloads`, `storage`, and `web.telegram.org` access
+- Manifest V3 with only `storage` and `web.telegram.org` access
 
 ## Install from source
 
@@ -28,7 +29,9 @@ Click the extension icon after opening a chat. Telegram loads message history la
 
 ## How it works
 
-The content script observes native `<video>` elements and Telegram Web A's official `.message-content.video .media-inner` video-card structure. If a card has not mounted its player yet, the extension starts Telegram's normal load action and waits for the video source. Normal HTTPS video files are passed to Chrome's Downloads API, which includes the browser's existing cookies. Page-local `blob:` videos are downloaded from the Telegram tab itself.
+The content script observes native `<video>` elements and Telegram Web A's official `.message-content.video .media-inner` video-card structure. If a card has not mounted its player yet, the extension starts Telegram's normal load action and waits for the video source.
+
+Telegram Web can expose a Service Worker streaming URL that fails when Chrome's Downloads API requests it outside the player and may produce a `document….htm` file. This extension instead fetches the source inside the Telegram page, checks the response type and video signature, creates a local video Blob, and only then starts the save. The button shows **Preparing video…** while those bytes are being collected; large videos can take longer.
 
 It does **not** break Telegram encryption, discover deleted messages, guess passwords, or access content that your logged-in account cannot already view.
 
@@ -42,7 +45,7 @@ npm run icons
 npm run package
 ```
 
-The packaged extension is written to `dist/telegram-video-saver-v1.3.0.zip`.
+The packaged extension is written to `dist/telegram-video-saver-v1.4.0.zip`.
 
 ## Compatibility notes
 
