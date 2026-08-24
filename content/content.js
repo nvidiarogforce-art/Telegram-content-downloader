@@ -5,8 +5,10 @@
   window.__telegramVideoSaverLoaded = true;
 
   const Utils = globalThis.TelegramMediaUtils;
-  const VIDEO_SELECTOR = "video";
-  const NON_VIDEO_UI_HINT = /(avatar|emoji|gif|reaction|sticker|wallpaper)/i;
+  const MEDIA_CARD_SELECTOR = "video, .media-inner";
+  const NON_VIDEO_UI_HINT = /(^|[\s_-])(avatar|emoji|gif|reaction|sticker|wallpaper)(?=$|[\s_-])/i;
+  const SOURCE_WAIT_TIMEOUT_MS = 60_000;
+  const SOURCE_POLL_INTERVAL_MS = 250;
   const descriptors = new Map();
   const descriptorIds = new WeakMap();
   const buttons = new Map();
@@ -22,7 +24,6 @@
   async function boot() {
     const settings = await chrome.storage.sync.get(["enabled"]);
     enabled = settings.enabled ?? true;
-    document.documentElement.classList.toggle("tgvs-enabled", enabled);
     if (enabled) scan(document);
 
     const observer = new MutationObserver(scheduleScan);
@@ -36,7 +37,10 @@
     addEventListener("scroll", scheduleButtonPosition, true);
     addEventListener("resize", scheduleButtonPosition);
     document.addEventListener("loadedmetadata", (event) => {
-      if (enabled && event.target?.tagName?.toLowerCase() === "video") registerVideo(event.target);
+      if (enabled && event.target?.tagName?.toLowerCase() === "video") {
+        const card = normalizeVideoCard(event.target);
+        if (card) registerVideoCard(card);
+      }
       scheduleButtonPosition();
     }, true);
   }
@@ -61,25 +65,39 @@
 
   function scan(root) {
     if (!enabled || !root?.querySelectorAll) return getStatus();
-    const videos = [];
-    if (root.matches?.(VIDEO_SELECTOR)) videos.push(root);
-    videos.push(...root.querySelectorAll(VIDEO_SELECTOR));
-    for (const video of videos) registerVideo(video);
+    const candidates = [];
+    if (root.matches?.(MEDIA_CARD_SELECTOR)) candidates.push(root);
+    candidates.push(...root.querySelectorAll(MEDIA_CARD_SELECTOR));
+
+    const cards = new Set(candidates.map(normalizeVideoCard).filter(Boolean));
+    for (const card of cards) registerVideoCard(card);
     pruneDescriptors();
     scheduleButtonPosition();
     return getStatus();
   }
 
-  function registerVideo(video) {
-    const descriptor = describeVideo(video);
-    const existingId = descriptorIds.get(video);
+  function normalizeVideoCard(element) {
+    if (element.tagName?.toLowerCase() === "video") {
+      return element.closest(".media-inner") || element;
+    }
+    if (!element.matches?.(".media-inner")) return null;
+    const durationBadge = element.querySelector(".message-media-duration");
+    const isWebAVideo = Boolean(element.closest(".message-content.video"));
+    const hasNativeVideo = Boolean(element.querySelector("video"));
+    const hasVideoDuration = Boolean(durationBadge && durationBadge.textContent.trim().toUpperCase() !== "GIF");
+    return isWebAVideo || hasNativeVideo || hasVideoDuration ? element : null;
+  }
+
+  function registerVideoCard(card) {
+    const descriptor = describeVideoCard(card);
+    const existingId = descriptorIds.get(card);
     if (!descriptor) {
       if (existingId) removeDescriptor(existingId);
       return;
     }
 
     const id = existingId || `tgvs-${nextId++}`;
-    descriptorIds.set(video, id);
+    descriptorIds.set(card, id);
     descriptor.id = id;
     descriptors.set(id, descriptor);
 
@@ -90,35 +108,27 @@
     button.dataset.videoId = id;
     button.title = "Download video";
     button.setAttribute("aria-label", "Download video");
-    button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5M5 20h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5M5 20h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Download video</span>';
     button.addEventListener("click", onSingleDownload);
     document.body.append(button);
     buttons.set(id, button);
   }
 
-  function describeVideo(video) {
-    if (video.tagName?.toLowerCase() !== "video") return null;
-    if (NON_VIDEO_UI_HINT.test(collectContextText(video))) return null;
+  function describeVideoCard(card) {
+    if (NON_VIDEO_UI_HINT.test(collectContextText(card))) return null;
+    const durationBadge = card.querySelector?.(".message-media-duration");
+    if (durationBadge?.textContent.trim().toUpperCase() === "GIF") return null;
 
-    const sourceNode = [...video.querySelectorAll("source")]
-      .find((node) => Utils.isVideoSourceUrl(node.src));
-    const sourceUrl = video.currentSrc || video.src || sourceNode?.src || "";
-    if (!Utils.isVideoSourceUrl(sourceUrl)) return null;
-
-    const rect = video.getBoundingClientRect();
-    const width = rect.width || video.videoWidth || video.width;
-    const height = rect.height || video.videoHeight || video.height;
-    if (width < 80 || height < 45) return null;
-
-    const nearbyName = video.closest("[data-mid], .message, .bubble, [class*='message']")?.querySelector(
-      "[class*='file-name'], [class*='document-name']"
-    )?.textContent;
+    const message = card.closest(".Message, [data-message-id], [data-mid], .message, .bubble");
+    const messageId = message?.dataset?.messageId || message?.dataset?.mid || "";
+    const nearbyName = message?.querySelector("[class*='file-name'], [class*='document-name']")?.textContent;
+    const source = resolveVideoSource(card);
     return {
-      element: video,
+      element: card,
       type: "video",
-      url: sourceUrl,
-      mimeType: sourceNode?.type || video.getAttribute("type") || "video/mp4",
-      filename: String(nearbyName || "").trim()
+      url: source.url,
+      mimeType: source.mimeType,
+      filename: String(nearbyName || (messageId && `telegram-video-${messageId}`) || "").trim()
     };
   }
 
@@ -129,6 +139,17 @@
       values.push(current.className || "", current.id || "", current.getAttribute?.("aria-label") || "");
     }
     return values.join(" ");
+  }
+
+  function resolveVideoSource(card) {
+    const video = card.tagName?.toLowerCase() === "video" ? card : card.querySelector("video");
+    const sourceNode = video && [...video.querySelectorAll("source")]
+      .find((node) => Utils.isVideoSourceUrl(node.src));
+    const url = video?.currentSrc || video?.src || sourceNode?.src || "";
+    return {
+      url: Utils.isVideoSourceUrl(url) ? url : "",
+      mimeType: sourceNode?.type || video?.getAttribute("type") || "video/mp4"
+    };
   }
 
   function pruneDescriptors() {
@@ -154,12 +175,12 @@
 
   function positionButtons() {
     for (const [id, button] of buttons) {
-      const video = descriptors.get(id)?.element;
-      if (!enabled || !video?.isConnected) {
+      const card = descriptors.get(id)?.element;
+      if (!enabled || !card?.isConnected) {
         button.hidden = true;
         continue;
       }
-      const rect = video.getBoundingClientRect();
+      const rect = card.getBoundingClientRect();
       const visible = rect.width >= 80
         && rect.height >= 45
         && rect.bottom > 0
@@ -168,8 +189,16 @@
         && rect.left < innerWidth;
       button.hidden = !visible;
       if (!visible) continue;
-      button.style.top = `${Math.max(8, rect.top + 8)}px`;
-      button.style.left = `${Math.max(8, Math.min(innerWidth - 42, rect.right - 42))}px`;
+
+      const buttonWidth = button.offsetWidth || 142;
+      const buttonHeight = button.offsetHeight || 34;
+      const belowVideo = rect.bottom + 6;
+      const top = belowVideo + buttonHeight <= innerHeight
+        ? belowVideo
+        : Math.max(8, rect.bottom - buttonHeight - 8);
+      const centeredLeft = rect.left + ((rect.width - buttonWidth) / 2);
+      button.style.top = `${top}px`;
+      button.style.left = `${Math.max(8, Math.min(innerWidth - buttonWidth - 8, centeredLeft))}px`;
     }
   }
 
@@ -179,7 +208,9 @@
     const button = event.currentTarget;
     const descriptor = descriptors.get(button.dataset.videoId);
     if (!descriptor) return;
+
     button.disabled = true;
+    setButtonLabel(button, "Loading video…");
     try {
       await downloadVideo(descriptor, 0);
       showToast("Video download started");
@@ -187,32 +218,68 @@
       showToast(error.message || "Could not download this video");
     } finally {
       button.disabled = false;
+      setButtonLabel(button, "Download video");
+      scheduleButtonPosition();
     }
   }
 
-  async function downloadVideo(descriptor, index) {
-    if (descriptor.type !== "video" || !Utils.isVideoSourceUrl(descriptor.url)) {
-      throw new Error("Only videos can be downloaded.");
-    }
+  function setButtonLabel(button, text) {
+    const label = button.querySelector("span");
+    if (label) label.textContent = text;
+  }
+
+  async function downloadVideo(descriptor, index, shouldCancel = () => false) {
+    if (descriptor.type !== "video") throw new Error("Only videos can be downloaded.");
+    const source = await ensureVideoSource(descriptor, shouldCancel);
     const fallback = Utils.makeFallbackName(index);
     const filename = Utils.ensureVideoExtension(descriptor.filename || fallback, {
-      mimeType: descriptor.mimeType,
-      url: descriptor.url
+      mimeType: source.mimeType,
+      url: source.url
     });
 
-    if (/^(blob:|data:)/i.test(descriptor.url)) {
-      triggerLocalDownload(descriptor.url, filename);
+    if (/^(blob:|data:)/i.test(source.url)) {
+      triggerLocalDownload(source.url, filename);
       return;
     }
 
     const response = await chrome.runtime.sendMessage({
       type: "DOWNLOAD_URL",
-      url: descriptor.url,
+      url: source.url,
       filename,
       mediaType: "video",
-      mimeType: descriptor.mimeType
+      mimeType: source.mimeType
     });
     if (!response?.ok) throw new Error(response?.error || "Chrome could not start the video download.");
+  }
+
+  async function ensureVideoSource(descriptor, shouldCancel) {
+    let source = resolveVideoSource(descriptor.element);
+    if (source.url) return source;
+    descriptor.element.dispatchEvent(new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      view: window
+    }));
+    source = await waitForVideoSource(descriptor.element, shouldCancel);
+    if (!source.url) {
+      throw new Error("Telegram did not load this video. Play it once, then press Download video again.");
+    }
+    descriptor.url = source.url;
+    descriptor.mimeType = source.mimeType;
+    return source;
+  }
+
+  function waitForVideoSource(card, shouldCancel) {
+    return new Promise((resolve) => {
+      const startedAt = Date.now();
+      const timer = setInterval(() => {
+        const source = resolveVideoSource(card);
+        if (source.url || Date.now() - startedAt >= SOURCE_WAIT_TIMEOUT_MS || shouldCancel()) {
+          clearInterval(timer);
+          resolve(source);
+        }
+      }, SOURCE_POLL_INTERVAL_MS);
+    });
   }
 
   function triggerLocalDownload(url, filename) {
@@ -233,15 +300,16 @@
       .filter((item) => item.type === "video" && item.element.isConnected)
       .filter((item) => mode !== "visible" || isVisible(item.element))
       .filter((item) => {
-        if (seen.has(item.url)) return false;
-        seen.add(item.url);
+        const key = item.url || item.filename || item.id;
+        if (seen.has(key)) return false;
+        seen.add(key);
         return true;
       });
 
     batch = createBatchState({ running: true, total: items.length, mode });
     if (!items.length) {
       batch.running = false;
-      showToast("No loaded videos found. Open a chat and scroll through its videos first.");
+      showToast("No Telegram video cards found. Open a chat and scroll through its videos first.");
       return getStatus();
     }
 
@@ -249,7 +317,7 @@
     for (let index = 0; index < items.length; index += 1) {
       if (batch.cancelled) break;
       try {
-        await downloadVideo(items[index], index);
+        await downloadVideo(items[index], index, () => batch.cancelled);
         batch.completed += 1;
       } catch (_error) {
         batch.failed += 1;
@@ -279,7 +347,7 @@
 
   function getStatus() {
     pruneDescriptors();
-    const videos = [...descriptors.values()].filter((item) => item.type === "video");
+    const videos = [...descriptors.values()];
     return {
       ok: true,
       enabled,
@@ -300,7 +368,7 @@
     toast.textContent = message;
     toast.dataset.visible = "true";
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { toast.dataset.visible = "false"; }, 3000);
+    toastTimer = setTimeout(() => { toast.dataset.visible = "false"; }, 4500);
   }
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -314,7 +382,6 @@
         break;
       case "TGMS_SET_ENABLED":
         enabled = Boolean(message.enabled);
-        document.documentElement.classList.toggle("tgvs-enabled", enabled);
         if (enabled) scan(document);
         else {
           batch.cancelled = true;

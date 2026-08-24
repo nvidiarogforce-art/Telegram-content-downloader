@@ -8,13 +8,14 @@
   color: #fff;
   cursor: pointer;
   display: flex;
+  gap: 7px;
   height: 34px;
   justify-content: center;
   margin: 0;
-  padding: 0;
+  padding: 0 13px;
   position: fixed;
   transition: background 140ms ease, opacity 140ms ease, transform 140ms ease;
-  width: 34px;
+  white-space: nowrap;
   z-index: 2147483646;
 }
 
@@ -33,9 +34,15 @@
 }
 
 .tgvs-download-button svg {
+  flex: 0 0 auto;
   height: 18px;
   pointer-events: none;
   width: 18px;
+}
+
+.tgvs-download-button span {
+  font: 700 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  pointer-events: none;
 }
 
 .tgvs-toast {
